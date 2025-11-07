@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import serviceApi from '../hooks/serviceApi';
 
 export default function Muhasebe(props) {
+  const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:5019';
   const [localSelectedRecordId, setLocalSelectedRecordId] = useState('');
   const [localAccountingOperations, setLocalAccountingOperations] = useState([]);
   const outlet = useOutletContext?.() ?? {};
@@ -34,19 +35,126 @@ export default function Muhasebe(props) {
   const setAccountingOperations = props.setAccountingOperations ?? setLocalAccountingOperations;
   const setNotification = props.setNotification ?? outlet.setNotification ?? (() => {});
 
+  // Email compose modal state
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailModalRecord, setEmailModalRecord] = useState(null);
+  const [emailTo, setEmailTo] = useState('');
+  const [emailCc, setEmailCc] = useState('');
+  const [emailBcc, setEmailBcc] = useState('');
+  const [emailSenderName, setEmailSenderName] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+
   // handlers for quote sending (placeholders that call outlet-provided callbacks if available)
   const handleSendQuote = async (id) => {
     if (!id) return;
-    if (outlet.sendQuote) {
-      try {
-        await outlet.sendQuote(id);
-        setNotification({ type: 'success', message: 'Teklif gönderildi.' });
-      } catch (err) {
-        console.error('sendQuote failed', err);
-        setNotification({ type: 'error', message: 'Teklif gönderilemedi.' });
+    
+    // Müşteri kaydını bul
+    const kayit = servisKayitlari.find(k => k.id === id);
+    if (!kayit) {
+      setNotification({ type: 'error', message: 'Kayıt bulunamadı.' });
+      return;
+    }
+
+    try {
+      // Müşteri e-mailini kontrol et
+      let customerEmail = '';
+      
+      // Müşteri isminden e-mail bul
+      if (kayit.firmaIsmi) {
+        try {
+          const customersResponse = await fetch(`${API_BASE}/api/customers`);
+          if (customersResponse.ok) {
+            const customers = await customersResponse.json();
+            const customer = customers.find(c => 
+              c.name && kayit.firmaIsmi && 
+              c.name.toLowerCase().trim() === kayit.firmaIsmi.toLowerCase().trim()
+            );
+            if (customer && customer.email) {
+              customerEmail = customer.email;
+            }
+          }
+        } catch (err) {
+          console.error('Müşteri bilgisi alınamadı:', err);
+        }
       }
-    } else {
-      setNotification({ type: 'info', message: 'Teklif gönderme özelliği yapılandırılmadı (placeholder).' });
+
+      // Show email compose modal with pre-filled customer email
+      setEmailModalRecord(kayit);
+      setEmailTo(customerEmail);
+      setEmailCc('');
+      setEmailBcc('');
+      setEmailModalOpen(true);
+    } catch (err) {
+      console.error('handleSendQuote error', err);
+      setNotification({ type: 'error', message: 'Bir hata oluştu.' });
+    }
+  };
+
+  const confirmSendEmail = async () => {
+    if (!emailModalRecord) return;
+    
+    // Validate To field
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailTo || !emailRegex.test(emailTo)) {
+      setNotification({ type: 'error', message: 'Geçerli bir To e-mail adresi girin.' });
+      return;
+    }
+
+    // Validate CC/BCC if provided
+    // Validate CC/BCC if provided (allow multiple separated by ';')
+    const splitAndValidate = (raw) => {
+      if (!raw) return [];
+      return raw.split(';').map(s => s.trim()).filter(s => s.length > 0);
+    };
+
+    const ccList = splitAndValidate(emailCc);
+    const bccList = splitAndValidate(emailBcc);
+
+    const invalidEmail = (list) => list.find(e => !emailRegex.test(e));
+    if (invalidEmail(ccList)) {
+      setNotification({ type: 'error', message: `Geçersiz CC adresi: ${invalidEmail(ccList)}` });
+      return;
+    }
+    if (invalidEmail(bccList)) {
+      setNotification({ type: 'error', message: `Geçersiz BCC adresi: ${invalidEmail(bccList)}` });
+      return;
+    }
+
+    try {
+      setSendingEmail(true);
+      
+      // Teklifi gönder
+      if (outlet.sendQuote) {
+  // pass cc/bcc and senderName as options
+  const response = await outlet.sendQuote(emailModalRecord.id, emailTo, { cc: ccList, bcc: bccList, senderName: emailSenderName });
+        
+        // Check response for email sending status
+        if (response?.emailSent === false && response?.emailError) {
+          setNotification({ 
+            type: 'warning', 
+            message: `PDF oluşturuldu ancak e-mail gönderilemedi: ${response.emailError}. Lütfen e-mail ayarlarınızı kontrol edin.` 
+          });
+        } else if (response?.emailSent === true) {
+          setNotification({ 
+            type: 'success', 
+            message: `Teklif başarıyla ${emailTo} adresine e-mail ile gönderildi.` 
+          });
+          setEmailModalOpen(false);
+        } else {
+          setNotification({ 
+            type: 'success', 
+            message: `Teklif PDF'i oluşturuldu. E-mail gönderimi için lütfen ayarlardan bir e-mail hesabı aktif edin.` 
+          });
+        }
+      } else {
+        setNotification({ type: 'info', message: 'Teklif gönderme özelliği yapılandırılmadı.' });
+      }
+    } catch (err) {
+      console.error('sendQuote failed', err);
+      const errorMessage = err?.response?.data?.emailError || err?.response?.data?.message || err?.message || 'Teklif gönderilemedi.';
+      setNotification({ type: 'error', message: errorMessage });
+    } finally {
+      setSendingEmail(false);
     }
   };
 
@@ -59,10 +167,9 @@ export default function Muhasebe(props) {
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
   const [bulkFilterFirma, setBulkFilterFirma] = useState('');
   const [bulkSelectedIds, setBulkSelectedIds] = useState([]);
-  const [bulkStep, setBulkStep] = useState(1); // 1: select, 2: edit prices
+  const [bulkStep, setBulkStep] = useState(1); // 1: select, 2: edit prices, 3: email compose
   // prices: { [id]: { partsPrice: number, servicesPrice: number, email?: string, note?: string } }
   const [bulkPrices, setBulkPrices] = useState({});
-  const [bulkRecipientEmail, setBulkRecipientEmail] = useState('');
   const [bulkOperations, setBulkOperations] = useState({});
   const [bulkPhotos, setBulkPhotos] = useState({});
 
@@ -167,12 +274,14 @@ export default function Muhasebe(props) {
     setBulkSelectedIds([]);
     setBulkStep(1);
     setBulkPrices({});
-    setBulkRecipientEmail('');
     setBulkOperations({});
     setBulkPhotos({});
+    setEmailTo('');
+    setEmailCc('');
+    setEmailBcc('');
   };
 
-  const sendBulk = async () => {
+  const proceedToBulkEmail = () => {
     // Validate that all records have at least some data
     const invalidRecords = bulkSelectedIds.filter(id => {
       const ops = bulkOperations[id] || [];
@@ -185,27 +294,90 @@ export default function Muhasebe(props) {
       );
       if (!confirmSend) return;
     }
+
+    // Try to find a common customer email from the first record
+    let defaultEmail = '';
+    if (bulkSelectedIds.length > 0) {
+      const firstRecord = servisKayitlari.find(s => s.id === bulkSelectedIds[0]);
+      if (firstRecord?.firmaIsmi) {
+        // We'll try to fetch customer email asynchronously and pre-fill
+        (async () => {
+          try {
+            const customersResponse = await fetch(`${API_BASE}/api/customers`);
+            if (customersResponse.ok) {
+              const customers = await customersResponse.json();
+              const customer = customers.find(c => 
+                c.name && firstRecord.firmaIsmi && 
+                c.name.toLowerCase().trim() === firstRecord.firmaIsmi.toLowerCase().trim()
+              );
+              if (customer && customer.email) {
+                setEmailTo(customer.email);
+              }
+            }
+          } catch (err) {
+            console.error('Could not load customer email', err);
+          }
+        })();
+      }
+    }
+
+    // Move to email compose step
+    setBulkStep(3);
+  };
+
+  const sendBulk = async () => {
+    // Validate To field
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailTo || !emailRegex.test(emailTo)) {
+      setNotification({ type: 'error', message: 'Geçerli bir To e-mail adresi girin.' });
+      return;
+    }
+
+    // Validate CC/BCC if provided
+    if (emailCc && !emailRegex.test(emailCc)) {
+      setNotification({ type: 'error', message: 'Geçerli bir CC e-mail adresi girin.' });
+      return;
+    }
+    if (emailBcc && !emailRegex.test(emailBcc)) {
+      setNotification({ type: 'error', message: 'Geçerli bir BCC e-mail adresi girin.' });
+      return;
+    }
+
+    const recipientEmail = emailTo;
     
     const payload = bulkSelectedIds.map(id => ({
       id,
       partsPrice: bulkPrices[id]?.partsPrice || 0,
       servicesPrice: bulkPrices[id]?.servicesPrice || 0,
-      email: bulkRecipientEmail || '',
+      email: recipientEmail,
       note: bulkPrices[id]?.note || ''
     }));
     
     if (outlet.sendBulkQuotes) {
       try {
-        // backend expects an object with recipientEmail and items
-        const requestBody = { recipientEmail: bulkRecipientEmail || '', items: payload };
-        await outlet.sendBulkQuotes(requestBody);
-        setNotification({ type: 'success', message: `${bulkSelectedIds.length} kayıt için toplu teklif başarıyla gönderildi.` });
+        setSendingEmail(true);
+        // backend expects an object with recipientEmail, items and optional senderName
+        const requestBody = { recipientEmail: recipientEmail, items: payload, senderName: emailSenderName || undefined };
+        const response = await outlet.sendBulkQuotes(requestBody);
+        
+        // Check response for email sending status
+        if (response?.emailSent === false && response?.emailError) {
+          setNotification({ type: 'warning', message: `PDF oluşturuldu ancak e-mail gönderilemedi: ${response.emailError}` });
+        } else if (response?.emailSent === true) {
+          setNotification({ type: 'success', message: `${bulkSelectedIds.length} kayıt için toplu teklif başarıyla ${recipientEmail} adresine gönderildi.` });
+        } else {
+          setNotification({ type: 'success', message: `${bulkSelectedIds.length} kayıt için toplu teklif başarıyla oluşturuldu.` });
+        }
+        
         // Reload service records to reflect status changes
         try { await reloadServisKayitlari(); } catch (e) { console.error('reload failed', e); }
         cancelBulk();
       } catch (err) {
         console.error('sendBulkQuotes failed', err);
-        setNotification({ type: 'error', message: 'Toplu teklifler gönderilemedi: ' + (err?.response?.data?.message || err?.message || 'Bilinmeyen hata') });
+        const errorMessage = err?.response?.data?.emailError || err?.response?.data?.message || err?.message || 'Bilinmeyen hata';
+        setNotification({ type: 'error', message: 'Toplu teklifler gönderilemedi: ' + errorMessage });
+      } finally {
+        setSendingEmail(false);
       }
     } else {
       // placeholder: just show summary
@@ -235,6 +407,77 @@ export default function Muhasebe(props) {
   return (
     <div className="bg-white shadow-xl rounded-2xl p-6">
       <h2 className="text-lg font-semibold text-slate-800 mb-4">Muhasebe</h2>
+      
+      {/* Email compose modal */}
+      {emailModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">E-posta Gönder</h3>
+              <button className="btn btn-sm btn-ghost" onClick={() => setEmailModalOpen(false)}>✕</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="label font-semibold">Kayıt</label>
+                <div className="text-sm text-slate-600">
+                  {emailModalRecord?.servisTakipNo} — {emailModalRecord?.firmaIsmi}
+                </div>
+              </div>
+              <div>
+                <label className="label font-semibold">Kime (To) <span className="text-red-500">*</span></label>
+                <input 
+                  type="email" 
+                  className="input input-bordered w-full" 
+                  placeholder="ornek@firma.com" 
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label font-semibold">Gönderen (opsiyonel)</label>
+                <input
+                  type="text"
+                  className="input input-bordered w-full"
+                  placeholder="Gönderen ismi (örn: Keten Pnömatik Teknik Ekibi)"
+                  value={emailSenderName}
+                  onChange={(e) => setEmailSenderName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label font-semibold">CC (İsteğe Bağlı, birden fazla için ; ile ayır)</label>
+                <input 
+                  type="text" 
+                  className="input input-bordered w-full" 
+                  placeholder="kopya1@firma.com; kopya2@firma.com" 
+                  value={emailCc}
+                  onChange={(e) => setEmailCc(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label font-semibold">BCC (İsteğe Bağlı, birden fazla için ; ile ayır)</label>
+                <input 
+                  type="text" 
+                  className="input input-bordered w-full" 
+                  placeholder="gizlikopya1@firma.com; gizlikopya2@firma.com" 
+                  value={emailBcc}
+                  onChange={(e) => setEmailBcc(e.target.value)}
+                />
+              </div>
+              {/* single-BCC input removed — use the multi-address BCC field above (semicolon-separated) */}
+              <div className="text-xs text-slate-500">
+                Teklif PDF'i oluşturulacak ve belirtilen adrese gönderilecek.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button className="btn" onClick={() => setEmailModalOpen(false)} disabled={sendingEmail}>İptal</button>
+              <button className="btn btn-primary" onClick={confirmSendEmail} disabled={sendingEmail}>
+                {sendingEmail ? 'Gönderiliyor...' : 'Gönder'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bulk quote modal */}
       {bulkModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -271,12 +514,8 @@ export default function Muhasebe(props) {
                   <button className="btn btn-primary" disabled={bulkSelectedIds.length === 0} onClick={startBulkEdit}>Devam Et</button>
                 </div>
               </div>
-            ) : (
+            ) : bulkStep === 2 ? (
               <div>
-                <div className="mb-3">
-                  <label className="label">E-posta (Varsayılan alıcı)</label>
-                  <input className="input input-bordered w-full" value={bulkRecipientEmail} onChange={(e) => setBulkRecipientEmail(e.target.value)} placeholder="ornek@firma.com" />
-                </div>
                 <div className="max-h-64 overflow-auto space-y-3 mb-4">
                   {bulkSelectedIds.map(id => {
                     const rec = servisKayitlari.find(s => s.id === id) || {};
@@ -477,7 +716,68 @@ export default function Muhasebe(props) {
                   <button className="btn" onClick={() => setBulkStep(1)}>Geri</button>
                   <div className="flex gap-2">
                     <button className="btn" onClick={cancelBulk}>İptal</button>
-                    <button className="btn btn-success" onClick={sendBulk}>Gönder</button>
+                    <button className="btn btn-success" onClick={proceedToBulkEmail}>Devam Et</button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {/* Step 3: Email compose */}
+                <div className="mb-4">
+                  <h4 className="font-semibold mb-2">E-posta Bilgileri</h4>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Toplu teklif {bulkSelectedIds.length} kayıt için oluşturulacak ve belirtilen adrese gönderilecek.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="label font-semibold">Kime (To) <span className="text-red-500">*</span></label>
+                    <input 
+                      type="email" 
+                      className="input input-bordered w-full" 
+                      placeholder="ornek@firma.com" 
+                      value={emailTo}
+                      onChange={(e) => setEmailTo(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label font-semibold">Gönderen (opsiyonel)</label>
+                    <input
+                      type="text"
+                      className="input input-bordered w-full"
+                      placeholder="Gönderen ismi (örn: Keten Pnömatik Teknik Ekibi)"
+                      value={emailSenderName}
+                      onChange={(e) => setEmailSenderName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label font-semibold">CC (İsteğe Bağlı)</label>
+                    <input 
+                      type="email" 
+                      className="input input-bordered w-full" 
+                      placeholder="kopya@firma.com" 
+                      value={emailCc}
+                      onChange={(e) => setEmailCc(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label font-semibold">BCC (İsteğe Bağlı, birden fazla için ; ile ayır)</label>
+                    <input 
+                      type="text" 
+                      className="input input-bordered w-full" 
+                      placeholder="gizlikopya1@firma.com; gizlikopya2@firma.com" 
+                      value={emailBcc}
+                      onChange={(e) => setEmailBcc(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between mt-6">
+                  <button className="btn" onClick={() => setBulkStep(2)}>Geri</button>
+                  <div className="flex gap-2">
+                    <button className="btn" onClick={cancelBulk}>İptal</button>
+                    <button className="btn btn-success" onClick={sendBulk} disabled={sendingEmail}>
+                      {sendingEmail ? 'Gönderiliyor...' : 'Gönder'}
+                    </button>
                   </div>
                 </div>
               </div>

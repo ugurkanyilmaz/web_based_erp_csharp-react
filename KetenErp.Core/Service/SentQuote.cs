@@ -11,5 +11,7 @@ namespace KetenErp.Core.Service
         public DateTime SentAt { get; set; }
         public string? ServiceRecordIds { get; set; } // comma-separated list of record IDs in the quote
         public string? CustomerName { get; set; }
+        // Optional sender name (Gönderen) provided when sending bulk quotes
+        public string? SenderName { get; set; }
     }
 }

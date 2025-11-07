@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import useOutsideClick from '../hooks/useOutsideClick';
 import stockApi from '../hooks/stockApi';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Link2, Plus, Search, Edit2, Trash2, AlertCircle, FileText, ChevronLeft, TrendingDown, TrendingUp } from 'lucide-react';
+import { Link2, Plus, Search, Edit2, Trash2, AlertCircle, FileText, ChevronLeft, TrendingDown, TrendingUp, Upload } from 'lucide-react';
+import axios from 'axios';
 
 export default function StockParts() {
   const [showPartModal, setShowPartModal] = useState(false);
@@ -11,6 +12,8 @@ export default function StockParts() {
   const [urunler, setUrunler] = useState([]);
   const [partForm, setPartForm] = useState({ id: null, sku: '', parcaNo: '', title: '', bagliUrun: '', productId: null, stok: '', minStok: '' });
   const [urunDropdownOpen, setUrunDropdownOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState(null);
   const urunDropdownRef = useRef(null);
 
   const q = (searchTerm || '').toLowerCase();
@@ -28,6 +31,55 @@ export default function StockParts() {
 
   const toplamParca = yedekParcalar.length;
   const kritikParca = yedekParcalar.filter(p => (p.stok ?? p.stock) <= (p.minStok ?? p.minStock)).length;
+
+  const handleExcelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    console.log('Excel dosyası seçildi:', file.name);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploading(true);
+    setUploadMessage(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      console.log('İstek gönderiliyor:', 'http://localhost:5019/api/stockimport/spareparts');
+      
+      const response = await axios.post('http://localhost:5019/api/stockimport/spareparts', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      console.log('Başarılı yanıt:', response.data);
+
+      setUploadMessage({
+        type: 'success',
+        text: `İçe aktarma tamamlandı! ${response.data.imported} yeni parça, ${response.data.updated} parça güncellendi.`
+      });
+
+      // Refresh spare parts list
+      const parts = await stockApi.getSpareParts();
+      setYedekParcalar(parts);
+
+      // Clear file input
+      e.target.value = '';
+    } catch (error) {
+      console.error('Upload error detaylı:', error);
+      console.error('Error response:', error.response);
+      setUploadMessage({
+        type: 'error',
+        text: error.response?.data?.message || error.message || 'Excel yüklenirken hata oluştu.'
+      });
+    } finally {
+      setUploading(false);
+      setTimeout(() => setUploadMessage(null), 5000);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -96,6 +148,38 @@ export default function StockParts() {
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         <div className="space-y-6">
+          {/* Summary: toplam ve kritik yedek parça */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-2xl shadow flex items-center justify-between">
+              <div>
+                <div className="text-xs text-slate-500">Toplam Yedek Parça</div>
+                <div className="text-2xl font-bold text-slate-800">{toplamParca}</div>
+              </div>
+              <div className="text-violet-500 w-12 h-12 bg-violet-50 rounded-lg flex items-center justify-center">
+                <Link2 size={22} />
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl shadow flex items-center justify-between">
+              <div>
+                <div className="text-xs text-slate-500">Kritik Yedek Parça</div>
+                <div className="text-2xl font-bold text-rose-600">{kritikParca}</div>
+              </div>
+              <div className="text-rose-500 w-12 h-12 bg-rose-50 rounded-lg flex items-center justify-center">
+                <AlertCircle size={22} />
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl shadow flex items-center justify-between">
+              <div>
+                <div className="text-xs text-slate-500">Kritik Oran</div>
+                <div className="text-2xl font-bold text-slate-800">{toplamParca === 0 ? '0%' : Math.round((kritikParca / toplamParca) * 100) + '%'}</div>
+              </div>
+              <div className="text-slate-700 w-12 h-12 bg-slate-50 rounded-lg flex items-center justify-center">
+                <FileText size={22} />
+              </div>
+            </div>
+          </div>
           <div className="flex justify-between items-center">
                 <div className="relative" ref={urunDropdownRef}>
               <Search className="absolute left-3 top-3 text-slate-400" size={18} />
@@ -107,14 +191,33 @@ export default function StockParts() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button 
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold shadow-md hover:opacity-90 transition flex items-center gap-2"
-              onClick={() => setShowPartModal(true)}
-            >
-              <Plus size={18} />
-              Yeni Yedek Parça Ekle
-            </button>
+            <div className="flex gap-3">
+              <label className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold shadow-md hover:opacity-90 transition flex items-center gap-2 cursor-pointer">
+                <Upload size={18} />
+                {uploading ? 'Yükleniyor...' : 'Excel Aktar'}
+                <input 
+                  type="file" 
+                  accept=".xlsx,.xls" 
+                  className="hidden" 
+                  onChange={handleExcelUpload}
+                  disabled={uploading}
+                />
+              </label>
+              <button 
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold shadow-md hover:opacity-90 transition flex items-center gap-2"
+                onClick={() => setShowPartModal(true)}
+              >
+                <Plus size={18} />
+                Yeni Yedek Parça Ekle
+              </button>
+            </div>
           </div>
+
+          {uploadMessage && (
+            <div className={`p-4 rounded-xl ${uploadMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+              {uploadMessage.text}
+            </div>
+          )}
 
           <div className="bg-white shadow-xl rounded-2xl overflow-hidden border border-slate-100">
             <div className="overflow-x-auto">

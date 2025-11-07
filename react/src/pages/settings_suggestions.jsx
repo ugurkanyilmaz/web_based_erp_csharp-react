@@ -145,6 +145,8 @@ export default function SettingsSuggestions() {
         <SuggestionsEditor storageKey={'ts_alanKisi_suggestions'} title={'Hazır Öneriler — Alan Kişi'} defaultList={['Fatmanur','Yeliz','Seray','Hatice']} />
 
         <SuggestionsEditor storageKey={'ts_yapanKisi_suggestions'} title={'Yapan Kişi Önerileri'} defaultList={['Ahmet','Mehmet','Ayşe','Fatma']} />
+
+        <SuggestionsEditor storageKey={'ts_hizmet_suggestions'} title={'Hizmet Önerileri'} defaultList={['Servis kiti','Yağ değişimi','Elektrikli Bakım','Havalı Bakım']} />
       </main>
     </div>
   );

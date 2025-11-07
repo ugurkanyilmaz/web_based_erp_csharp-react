@@ -211,9 +211,16 @@ export default function TeknikServis() {
     }
   };
 
-  const sendQuote = async (id) => {
-    // single item wrapper
-    return sendBulkQuotes({ recipientEmail: '', items: [{ id, partsPrice: 0, servicesPrice: 0, email: '', note: '' }] });
+  const sendQuote = async (id, customerEmail = '', options = {}) => {
+    // single item wrapper - include optional cc/bcc/senderName in payload
+    const payload = {
+      recipientEmail: customerEmail,
+      recipientCc: options.cc || undefined,
+      recipientBcc: options.bcc || undefined,
+      senderName: options.senderName || undefined,
+      items: [{ id, partsPrice: 0, servicesPrice: 0, email: '', note: '' }]
+    };
+    return sendBulkQuotes(payload);
   };
 
   return (

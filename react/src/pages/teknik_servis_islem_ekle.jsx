@@ -100,15 +100,37 @@ export default function IslemEkle(props) {
   const [addPartName, setAddPartName] = useState('');
   const [addPartQuantity, setAddPartQuantity] = useState(1);
 
-  // Quick selectable suggestions for hizmet (but still editable)
-  const HIZMET_SUGGESTIONS = [
-    'Servis kiti',
-    'Yağ değişimi',
-    'Elektrikli Bakım',
-    'Havalı Bakım',
-  ];
+  // Quick selectable suggestions for hizmet (loaded from settings/suggestions so they can be edited)
+  const [hizmetSuggestions, setHizmetSuggestions] = useState([]);
   const [showHizmetSuggestions, setShowHizmetSuggestions] = useState(false);
   const hizmetRef = useRef(null);
+
+  useEffect(() => {
+    const key = 'ts_hizmet_suggestions';
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/settings/suggestions/${encodeURIComponent(key)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!mounted) return;
+          setHizmetSuggestions((data || []).map(d => d.value));
+          return;
+        }
+      } catch (e) { }
+
+      // fallback to localStorage or defaults
+      try {
+        const stored = JSON.parse(localStorage.getItem(key) || 'null');
+        if (Array.isArray(stored) && stored.length > 0) { if (mounted) setHizmetSuggestions(stored.map(s => (typeof s === 'string' ? s : (s.value || '')))); return; }
+      } catch (e) { }
+
+      const defaults = ['Servis kiti','Yağ değişimi','Elektrikli Bakım','Havalı Bakım'];
+      try { localStorage.setItem(key, JSON.stringify(defaults)); } catch (e) { }
+      if (mounted) setHizmetSuggestions(defaults);
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   // Close hizmet suggestions when clicking outside
   useOutsideClick(hizmetRef, () => setShowHizmetSuggestions(false));
@@ -719,7 +741,7 @@ export default function IslemEkle(props) {
               {/* dropdown panel styled like other dropdowns */}
               {showHizmetSuggestions && (
                 <ul className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-auto z-50">
-                  {HIZMET_SUGGESTIONS.filter(h => (localHizmetName ? h.toLowerCase().includes(localHizmetName.toLowerCase()) : true)).map((h) => (
+                  {hizmetSuggestions.filter(h => (localHizmetName ? h.toLowerCase().includes(localHizmetName.toLowerCase()) : true)).map((h) => (
                     <li
                       key={h}
                       className="px-4 py-2 hover:bg-slate-50 cursor-pointer text-sm"
@@ -728,7 +750,7 @@ export default function IslemEkle(props) {
                       {h}
                     </li>
                   ))}
-                  {HIZMET_SUGGESTIONS.filter(h => (localHizmetName ? h.toLowerCase().includes(localHizmetName.toLowerCase()) : true)).length === 0 && (
+                  {hizmetSuggestions.filter(h => (localHizmetName ? h.toLowerCase().includes(localHizmetName.toLowerCase()) : true)).length === 0 && (
                     <li className="px-4 py-2 text-slate-500 text-sm">Eşleşen öneri yok</li>
                   )}
                 </ul>
@@ -736,6 +758,9 @@ export default function IslemEkle(props) {
             </div>
 
             <button onClick={() => { hizmetEkle(); setShowHizmetSuggestions(false); }} className="btn btn-primary" disabled={!selectedRecordId || !localHizmetName.trim()}>Ekle</button>
+            <div>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/settings/suggestions#hizmet')}>Yönet</button>
+            </div>
           </div>
           <ul className="divide-y">
             {islemEkleme.serviceItems.length === 0 && <li className="text-sm text-slate-500 py-2">Henüz hizmet eklenmedi.</li>}

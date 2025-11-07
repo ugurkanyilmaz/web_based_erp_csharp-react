@@ -25,6 +25,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Send cookies (refresh token) along with requests
+  withCredentials: true,
 });
 
 // Debug: expose and log the resolved base URL to make mobile debugging easier.
@@ -39,6 +41,71 @@ api.interceptors.request.use((cfg) => {
   if (token) cfg.headers.Authorization = `Bearer ${token}`;
   return cfg;
 });
+
+// Response interceptor: if 401, try to refresh once and retry the original request.
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function onRefreshed(newToken) {
+  refreshSubscribers.forEach(cb => cb(newToken));
+  refreshSubscribers = [];
+}
+
+function addRefreshSubscriber(cb) {
+  refreshSubscribers.push(cb);
+}
+
+api.interceptors.response.use(
+  res => res,
+  async err => {
+    const originalRequest = err.config;
+    if (!originalRequest) return Promise.reject(err);
+
+    // If 401 and we haven't retried yet, attempt refresh
+    if (err.response && err.response.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        // Queue the request until refresh finishes
+        return new Promise((resolve, reject) => {
+          addRefreshSubscriber((token) => {
+            if (token) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            } else {
+              reject(err);
+            }
+          });
+        });
+      }
+
+      isRefreshing = true;
+      try {
+        const refreshRes = await api.post('/api/auth/refresh');
+        const newToken = refreshRes.data?.token;
+        if (newToken) {
+          localStorage.setItem('token', newToken);
+          onRefreshed(newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        }
+        // fallback: redirect to login
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return Promise.reject(err);
+      } catch (refreshErr) {
+        // refresh failed -> force login
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(err);
+  }
+);
 
 export default api;
 export { base as apiBase };

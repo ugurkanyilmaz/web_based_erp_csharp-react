@@ -15,6 +15,10 @@
   </PackageReference>
   <PackageReference Include="QuestPDF" Version="2025.7.3" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.7.0" />
+    <!-- Use MailKit for robust SMTP (supports implicit SSL on port 465 and better TLS handling) -->
+    <PackageReference Include="MailKit" Version="4.2.0" />
+    <!-- EPPlus for Excel import/export (free for non-commercial use) -->
+    <PackageReference Include="EPPlus" Version="7.5.2" />
   </ItemGroup>
 
   <ItemGroup>

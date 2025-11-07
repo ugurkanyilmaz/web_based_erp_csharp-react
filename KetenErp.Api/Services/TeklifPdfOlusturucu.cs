@@ -44,36 +44,66 @@ namespace KetenErp.Api.Services
                     page.Margin(30);
                     page.Size(PageSizes.A4);
 
-                    // --- HEADER ---
-                    page.Header().Column(headerCol =>
+                    // --- HEADER (show only on the first page) ---
+                    page.Header().ShowOnce().Column(headerCol =>
                     {
-                        // Üst kısım: Logo + Firma Bilgileri + Teklif Formu Başlığı
+                        var servicesFolder = System.IO.Path.Combine(AppContext.BaseDirectory, "Services");
+                        var pngLogoPath = System.IO.Path.Combine(servicesFolder, "logo.png");
+
+                        // Row: Logo (left) + TEKLİF FORMU (right, vertically centered)
                         headerCol.Item().Row(row =>
                         {
-                            // Logo - Sol taraf
-                                if (!string.IsNullOrEmpty(logoYolu) && File.Exists(logoYolu))
+                            // Logo area (left)
+                            row.ConstantItem(200).Height(80).Element(el =>
+                            {
+                                if (System.IO.File.Exists(pngLogoPath))
                                 {
-                                    row.ConstantItem(180).Height(60).Image(logoYolu);
+                                    el.Image(pngLogoPath).FitArea();
+                                }
+                                else if (!string.IsNullOrEmpty(logoYolu) && System.IO.File.Exists(logoYolu))
+                                {
+                                    el.Image(logoYolu).FitArea();
                                 }
                                 else
                                 {
-                                    Console.WriteLine($"[PDF] Logo not found at: {logoYolu}");
+                                    Console.WriteLine($"[PDF] No header logo found. Checked: {pngLogoPath}, {logoYolu}");
                                 }
-
-                            // Sağ taraf - TEKLİF FORMU
-                            row.RelativeItem().Column(col =>
-                            {
-                                col.Item().AlignRight().Text("TEKLİF FORMU")
-                                    .FontSize(18).Bold().FontColor("#D32F2F");
                             });
+
+                            // TEKLİF FORMU (right side, vertically aligned to center)
+                            row.RelativeItem().AlignMiddle().AlignRight().Text("TEKLİF FORMU")
+                                .FontSize(20).Bold().FontColor("#D32F2F");
                         });
 
-                        // Firma bilgisi çizgisi
-                        headerCol.Item().PaddingTop(5).LineHorizontal(1).LineColor("#E0E0E0");
+                        // Separator line below header
+                        headerCol.Item().PaddingTop(8).LineHorizontal(1.5f).LineColor("#D32F2F");
+                    });
+
+                    // --- FOOTER (anchored to bottom of every page) ---
+                    page.Footer().AlignBottom().Element(containerFooter =>
+                    {
+                        var footerImagePath = System.IO.Path.Combine(AppContext.BaseDirectory, "Services", "footer.jpg");
+                        if (System.IO.File.Exists(footerImagePath))
+                        {
+                            containerFooter.Height(60).Image(footerImagePath).FitWidth();
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[PDF] Footer image not found at: {footerImagePath}");
+                            containerFooter.Column(footerCol =>
+                            {
+                                footerCol.Item().LineHorizontal(0.5f).LineColor("#E0E0E0");
+                                footerCol.Item().PaddingTop(5).Text(txt =>
+                                {
+                                    txt.Span("Keten Pnömatik | ").FontSize(7);
+                                    txt.Span("Endüstriyel Montaj Ekipmanları").FontSize(7).Italic();
+                                });
+                            });
+                        }
                     });
 
                     // --- CONTENT ---
-                    page.Content().PaddingVertical(15).Column(col =>
+                    page.Content().PaddingBottom(15).Column(col =>
                     {
                         // Müşteri ve Belge Bilgileri - Kutu içinde
                         col.Item().Border(1).BorderColor("#E0E0E0").Padding(10).Column(infoCol =>
@@ -204,8 +234,8 @@ namespace KetenErp.Api.Services
                                             {
                                                 if (!string.IsNullOrWhiteSpace(p) && System.IO.File.Exists(p))
                                                 {
-                                                    // reserve small constant width for each thumbnail
-                                                    photoRow.ConstantItem(70).Height(60).PaddingRight(6).Element(el =>
+                                                    // reserve smaller constant width for each thumbnail (reduced size)
+                                                    photoRow.ConstantItem(56).Height(44).PaddingRight(4).Element(el =>
                                                     {
                                                         el.Image(p).FitArea();
                                                     });
@@ -257,7 +287,8 @@ namespace KetenErp.Api.Services
                         {
                             row.RelativeItem().Column(leftCol =>
                             {
-                                leftCol.Item().Text("* Fiyatlar KDV içermemektedir.").FontSize(8);
+                                leftCol.Item().Text("* Fiyatlar KDV dahil değildir.").FontSize(8);
+                                leftCol.Item().PaddingTop(3).Text("* Teklifin geçerlilik süresi 7 gündür.").FontSize(8);
                                 leftCol.Item().PaddingTop(10).Text("Saygılarımızla,").FontSize(9);
                                 leftCol.Item().Text("Keten Pnömatik").FontSize(9).Bold();
                             });
@@ -284,45 +315,18 @@ namespace KetenErp.Api.Services
                                             displayLink = "/" + rel;
                                         }
                                         // Print the link as plain text (many PDF viewers auto-detect URLs). Also include original path in parens.
+                                        // Use slightly smaller font sizes so the block doesn't look too heavy.
                                         photoCol.Item().PaddingTop(4).Text(t =>
                                         {
-                                            t.Span(displayLink).FontSize(9).FontColor("#1565C0");
+                                            t.Span(displayLink).FontSize(8).FontColor("#1565C0");
                                             t.Span(" ");
-                                            t.Span("(") .FontSize(8).FontColor("#777");
-                                            t.Span(ph).FontSize(8).FontColor("#777");
-                                            t.Span(")").FontSize(8).FontColor("#777");
+                                            t.Span("(").FontSize(7).FontColor("#777");
+                                            t.Span(ph).FontSize(7).FontColor("#777");
+                                            t.Span(")").FontSize(7).FontColor("#777");
                                         });
                                     }
                                     catch { /* ignore individual photo link issues */ }
                                 }
-                            });
-                        }
-                    });
-
-                    // --- FOOTER ---
-                    page.Footer().AlignCenter().Element((containerFooter) =>
-                    {
-                        // Try to use footer image if present in Services/footer.jpg
-                        var footerImagePath = System.IO.Path.Combine(AppContext.BaseDirectory, "Services", "footer.jpg");
-                        if (System.IO.File.Exists(footerImagePath))
-                        {
-                            // Render footer image full width with a small reserved height
-                            containerFooter.PaddingTop(4).Height(70).Row(r =>
-                            {
-                                r.RelativeItem().Image(footerImagePath).FitArea();
-                            });
-                        }
-                        else
-                        {
-                            Console.WriteLine($"[PDF] Footer image not found at: {footerImagePath}");
-                            containerFooter.Column(footerCol =>
-                            {
-                                footerCol.Item().LineHorizontal(0.5f).LineColor("#E0E0E0");
-                                footerCol.Item().PaddingTop(5).Text(txt =>
-                                {
-                                    txt.Span("Keten Pnömatik | ").FontSize(7);
-                                    txt.Span("Endüstriyel Montaj Ekipmanları").FontSize(7).Italic();
-                                });
                             });
                         }
                     });

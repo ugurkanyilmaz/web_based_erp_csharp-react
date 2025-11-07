@@ -204,7 +204,8 @@ export default function ServisNew(props) {
             return (
               <div className="form-control mb-6" key={key}>
                 <label className="label text-sm font-semibold text-slate-700 mb-3">{label}:</label>
-                <div className="relative">
+                {/* Attach customerRef to this wrapper so useOutsideClick can detect inside clicks correctly */}
+                <div className="relative" ref={customerRef}>
                   <input
                     type="text"
                     className="input input-bordered rounded-xl py-3 mt-2 w-full"

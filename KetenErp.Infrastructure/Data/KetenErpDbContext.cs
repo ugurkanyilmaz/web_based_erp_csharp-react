@@ -26,6 +26,8 @@ namespace KetenErp.Infrastructure.Data
     public DbSet<KetenErp.Core.Service.ServiceTemplate> ServiceTemplates { get; set; } = null!;
     // Suggestions for settings-driven suggestion lists (e.g. ts_alanKisi, ts_yapanKisi)
     public DbSet<KetenErp.Core.Entities.Suggestion> Suggestions { get; set; } = null!;
+    // Refresh tokens for long-lived sessions
+    public DbSet<KetenErp.Core.Entities.RefreshToken> RefreshTokens { get; set; } = null!;
     // Email accounts for sending offers
     public DbSet<KetenErp.Core.Entities.EmailAccount> EmailAccounts { get; set; } = null!;
         
@@ -60,6 +62,17 @@ namespace KetenErp.Infrastructure.Data
                 // Serialized JSON stored as TEXT
                 entity.Property(e => e.SerializedRecordJson).HasColumnType("TEXT");
                 entity.Property(e => e.CompletedAt).IsRequired();
+            });
+
+            // Map RefreshToken explicitly
+            modelBuilder.Entity<KetenErp.Core.Entities.RefreshToken>(entity =>
+            {
+                entity.ToTable("RefreshTokens");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Token).IsRequired();
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.ExpiresAt).IsRequired();
+                entity.Property(e => e.CreatedAt).IsRequired();
             });
         }
     }

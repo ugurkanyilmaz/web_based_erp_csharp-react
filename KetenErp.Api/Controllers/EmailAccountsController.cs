@@ -99,5 +99,58 @@ namespace KetenErp.Api.Controllers
             await _db.SaveChangesAsync();
             return Ok(acc);
         }
+
+        [HttpPost("{id:int}/test")]
+        public async Task<IActionResult> TestAccount(int id, [FromServices] KetenErp.Api.Services.EmailService emailService)
+        {
+            var acc = await _db.EmailAccounts.FindAsync(id);
+            if (acc == null) return NotFound();
+
+            try
+            {
+                // Test by sending to the from address itself
+                var result = await emailService.SendEmailWithAttachmentAsync(
+                    acc, 
+                    acc.FromAddress, 
+                    "Test E-posta - Keten ERP", 
+                    "<html><body><h2>Test Başarılı!</h2><p>Bu e-posta, Keten ERP sisteminizden gönderilmiştir. E-posta ayarlarınız doğru çalışıyor.</p></body></html>",
+                    string.Empty // no attachment
+                );
+
+                if (result.Success)
+                {
+                    return Ok(new { success = true, message = "Test e-postası başarıyla gönderildi. Gelen kutunuzu kontrol edin." });
+                }
+                else
+                {
+                    return Ok(new { success = false, message = result.Error });
+                }
+            }
+            catch (Exception ex)
+            {
+                return Ok(new { success = false, message = $"Test hatası: {ex.Message}" });
+            }
+        }
+
+        [HttpPost("{id:int}/diagnose")]
+        public async Task<IActionResult> DiagnoseAccount(int id, [FromServices] KetenErp.Api.Services.EmailService emailService)
+        {
+            var acc = await _db.EmailAccounts.FindAsync(id);
+            if (acc == null) return NotFound();
+
+            try
+            {
+                var diagnostic = await emailService.DiagnoseConnectionAsync(acc);
+                return Ok(diagnostic);
+            }
+            catch (Exception ex)
+            {
+                return Ok(new
+                {
+                    overallSuccess = false,
+                    summary = $"Tanılama hatası: {ex.Message}"
+                });
+            }
+        }
     }
 }

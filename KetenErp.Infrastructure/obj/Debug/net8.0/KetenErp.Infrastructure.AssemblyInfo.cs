@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KetenErp.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+eb8ca5436bf4bef5ecda4fd0fff8a7694d0f6266")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bfb68446ac0ba8b263563a0aed12e7e79cff692c")]
 [assembly: System.Reflection.AssemblyProductAttribute("KetenErp.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KetenErp.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

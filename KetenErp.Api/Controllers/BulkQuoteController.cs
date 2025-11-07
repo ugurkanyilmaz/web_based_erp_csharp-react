@@ -20,14 +20,16 @@ namespace KetenErp.Api.Controllers
     private readonly KetenErp.Core.Repositories.IProductRepository _productRepo;
     private readonly KetenErp.Core.Repositories.ISparePartRepository _spareRepo;
     private readonly KetenErp.Infrastructure.Data.KetenErpDbContext _db;
+    private readonly EmailService _emailService;
 
-        public BulkQuoteController(IServiceRecordRepository recordRepo, IServiceOperationRepository opRepo, KetenErp.Core.Repositories.IProductRepository productRepo, KetenErp.Core.Repositories.ISparePartRepository spareRepo, KetenErp.Infrastructure.Data.KetenErpDbContext db)
+        public BulkQuoteController(IServiceRecordRepository recordRepo, IServiceOperationRepository opRepo, KetenErp.Core.Repositories.IProductRepository productRepo, KetenErp.Core.Repositories.ISparePartRepository spareRepo, KetenErp.Infrastructure.Data.KetenErpDbContext db, EmailService emailService)
         {
             _recordRepo = recordRepo;
             _opRepo = opRepo;
             _productRepo = productRepo;
             _spareRepo = spareRepo;
             _db = db;
+            _emailService = emailService;
         }
 
         public class BulkQuoteItemDto
@@ -42,6 +44,12 @@ namespace KetenErp.Api.Controllers
         public class BulkQuoteRequest
         {
             public string? RecipientEmail { get; set; }
+            // optional array form (frontend may send array)
+            public List<string>? RecipientEmails { get; set; }
+            public List<string>? RecipientCc { get; set; }
+            public List<string>? RecipientBcc { get; set; }
+            public string? SenderName { get; set; }
+
             public List<BulkQuoteItemDto> Items { get; set; } = new List<BulkQuoteItemDto>();
         }
 
@@ -257,6 +265,101 @@ namespace KetenErp.Api.Controllers
             await System.IO.File.WriteAllBytesAsync(filePath, pdf);
             exported.Add(filePath);
 
+            // E-mail gönderme işlemi
+            bool emailSent = false;
+            string emailError = string.Empty;
+            
+            // Build recipient lists (support either single semi-colon separated string or arrays)
+            List<string> toList = new List<string>();
+            if (req.RecipientEmails != null && req.RecipientEmails.Any())
+            {
+                toList.AddRange(req.RecipientEmails.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            }
+            else if (!string.IsNullOrEmpty(req.RecipientEmail))
+            {
+                toList.AddRange(req.RecipientEmail.Split(';').Select(s => s.Trim()).Where(s => s.Length > 0));
+            }
+
+            List<string> ccList = new List<string>();
+            if (req.RecipientCc != null && req.RecipientCc.Any())
+            {
+                ccList.AddRange(req.RecipientCc.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            }
+
+            List<string> bccList = new List<string>();
+            if (req.RecipientBcc != null && req.RecipientBcc.Any())
+            {
+                bccList.AddRange(req.RecipientBcc.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+            }
+
+            if (toList.Count > 0)
+            {
+                try
+                {
+                    Console.WriteLine($"[BulkQuote] Attempting to send email to: {string.Join(';', toList)}");
+                    
+                    // Aktif e-mail hesabını al
+                    var activeEmailAccount = await _db.EmailAccounts
+                        .FirstOrDefaultAsync(e => e.IsActive);
+
+                    if (activeEmailAccount != null)
+                    {
+                        Console.WriteLine($"[BulkQuote] Found active email account: {activeEmailAccount.Name}");
+                        
+                        string emailSubject = $"Servis Teklifi - {musteriAdi}";
+                        string emailBody = $@"
+                            <html>
+                            <body style='font-family: Arial, sans-serif;'>
+                                <h2>Servis Teklifi</h2>
+                                <p>Sayın {musteriAdi},</p>
+                                <p>Ekteki PDF dosyasında servis hizmetlerimiz için hazırlanmış teklifimizi bulabilirsiniz.</p>
+                                <p>Herhangi bir sorunuz için bizimle iletişime geçebilirsiniz.</p>
+                                <br/>
+                                <p>Saygılarımızla,</p>
+                                <p><strong>Keten ERP Teknik Servis</strong></p>
+                            </body>
+                            </html>
+                        ";
+
+                        var result = await _emailService.SendEmailWithAttachmentAsync(
+                            activeEmailAccount,
+                            toList,
+                            ccList,
+                            bccList,
+                            emailSubject,
+                            emailBody,
+                            filePath,
+                            req.SenderName
+                        );
+
+                        emailSent = result.Success;
+                        if (!emailSent)
+                        {
+                            emailError = result.Error;
+                            Console.WriteLine($"[BulkQuote] Email send failed: {emailError}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[BulkQuote] Email sent successfully");
+                        }
+                    }
+                    else
+                    {
+                        emailError = "Aktif e-mail hesabı bulunamadı. Lütfen ayarlardan bir e-mail hesabı aktif edin.";
+                        Console.WriteLine($"[BulkQuote] {emailError}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    emailError = $"E-mail gönderilirken hata oluştu: {ex.Message}";
+                    Console.WriteLine($"[BulkQuote] Email send exception: {ex}");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"[BulkQuote] No recipient email provided, skipping email send");
+            }
+
             // Gönderilen teklifi veritabanına kaydet
             try
             {
@@ -268,6 +371,8 @@ namespace KetenErp.Api.Controllers
                     SentAt = DateTime.UtcNow,
                     ServiceRecordIds = string.Join(",", req.Items.Select(i => i.Id)),
                     CustomerName = musteriAdi
+                        ,
+                        SenderName = req.SenderName
                 };
                 _db.SentQuotes.Add(sentQuote);
                 await _db.SaveChangesAsync();
@@ -295,7 +400,11 @@ namespace KetenErp.Api.Controllers
                 }
             }
 
-            return Ok(new { files = exported });
+            return Ok(new { 
+                files = exported, 
+                emailSent = emailSent,
+                emailError = emailError
+            });
         }
 
         // List sent quotes (for archive view)
