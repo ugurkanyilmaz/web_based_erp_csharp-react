@@ -376,10 +376,9 @@ namespace KetenErp.Api
                 }
             }
 
-            await EnsureUser("admin", "admin@keten.local", "admin123", "admin", "System Administrator");
-            await EnsureUser("servis", "servis@keten.local", "Servis123!", "servis", "Servis User");
-            await EnsureUser("muhasebe", "muhasebe@keten.local", "Muhasebe123!", "muhasebe", "Muhasebe User");
-            await EnsureUser("user", "user@keten.local", "User123!", "user", "Normal User");
+            await EnsureUser("ugur", "ugur@havalielaletleritamiri.com", "ugur762.", "admin", "Uğur Yılmaz - Admin");
+            await EnsureUser("muhasebe", "muhasebe@havalielaletleritamiri.com", "keten@4145!", "muhasebe", "Muhasebe");
+            await EnsureUser("teknik", "teknik@havalielaletleritamiri.com", "servis@1234", "servis", "Teknik Servis");
         }
     }
 }

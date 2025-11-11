@@ -9,8 +9,8 @@ services:
     container_name: ketenerp-caddy
     restart: always
     ports:
-      - "8080:80"      # HTTP on port 8080 instead of 80
-      - "443:443"
+      - "80:80"        # HTTP (Let's Encrypt ACME challenge)
+      - "443:443"      # HTTPS
       - "443:443/udp"  # HTTP/3
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile

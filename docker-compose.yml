@@ -7,8 +7,8 @@ services:
     restart: always
     environment:
       POSTGRES_DB: ketenerp
-      POSTGRES_USER: ketenuser
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeThisPassword123!}
+      POSTGRES_USER: ${POSTGRES_USER:-keten_admin_usr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Kt3nErP@2024!Scr3tDB#Pwd92xYz}
       # PostgreSQL performance tuning
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=tr_TR.UTF-8"
     volumes:
@@ -18,7 +18,7 @@ services:
     expose:
       - "5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ketenuser -d ketenerp"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-keten_admin_usr} -d ketenerp"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,8 +49,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__DefaultConnection=Host=postgres;Database=ketenerp;Username=ketenuser;Password=${POSTGRES_PASSWORD:-ChangeThisPassword123!};Maximum Pool Size=100;Timeout=30;Command Timeout=60
-      - Jwt__Key=${JWT_SECRET_KEY:-please-change-this-secret-to-a-long-random-value-for-production}
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=ketenerp;Username=${POSTGRES_USER:-keten_admin_usr};Password=${POSTGRES_PASSWORD:-Kt3nErP@2024!Scr3tDB#Pwd92xYz};Maximum Pool Size=100;Timeout=30;Command Timeout=60
+      - Jwt__Key=${JWT_SECRET_KEY:-7mK9nP2qR5sT8vW1xZ4aC6bE0dF3gH7jL9mN2pQ5rS8tV1wX4yA6bC0dE3fG7hJ9k}
       - Jwt__Issuer=KetenErp
       - Jwt__Audience=KetenErpUsers
       - Jwt__AccessTokenExpirationMinutes=720
