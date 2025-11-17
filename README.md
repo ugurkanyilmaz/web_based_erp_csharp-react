@@ -38,7 +38,7 @@ Modern, web-based ERP solution built with .NET 8 and React.
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/ugurkanyilmaz/web_based_erp_csharp-react
 cd erp
 ```
 
