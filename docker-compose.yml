@@ -130,15 +130,13 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Caddy reverse proxy to handle automatic HTTPS using the root Caddyfile
+  # Caddy reverse proxy (host entry port mapped to 8443 -> container 80)
   caddy:
     image: caddy:2-alpine
     container_name: ketenerp-caddy
     restart: always
     ports:
-      - "80:80"        # HTTP (Let's Encrypt ACME challenge)
-      - "443:443"      # HTTPS
-      - "443:443/udp"  # HTTP/3
+      - "8443:80"      # Host entry port 8443 forwards to container HTTP 80
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data

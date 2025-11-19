@@ -43,8 +43,11 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",                                    // Vite dev server
                 "http://localhost:80",                                      // Docker frontend local
                 "http://localhost",                                         // Docker frontend alternative
+                // Common host IP used when testing inside Docker on this host
+                "http://10.10.10.3:8443",
                 "https://havalielaletleritamiri.com",                      // Production domain
-                "http://havalielaletleritamiri.com",                       // Production HTTP
+                "http://havalielaletleritamiri.com",                     // Production HTTP
+                "http://havalielaletleritamiri.com:8443",
                 builder.Configuration["FrontendUrl"] ?? "http://localhost"  // .env'den
             };
             
