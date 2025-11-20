@@ -1,15 +1,16 @@
 {
-    # Otomatik HTTPS kapalı (İsteğin üzerine HTTP üzerinden 8443 kullanıyoruz)
-    auto_https off
+    # auto_https off SİLDİK. Çünkü HTTPS lazım.
     admin off
 }
 
-# Belirli IP'ler yerine tüm interface'lerde 8443 portunu dinle
-:8443 {
+http://:8443 {
+    # TLS kapalı (HTTP olarak dinle). Cloudflare tarafında 'No TLS Verify' gerekiyorsa
+    # bu ayarı kullanabilirsiniz veya cloudflared config'de TLS doğrulamasını kapatın.
+    # tls internal  <-- yorumlandı / kaldırıldı
+
     encode gzip zstd
 
     header {
-        # Güvenlik headerları
         X-Frame-Options "SAMEORIGIN"
         X-Content-Type-Options "nosniff"
         X-XSS-Protection "1; mode=block"
@@ -22,7 +23,7 @@
         respond "OK" 200
     }
 
-    # API İstekleri -> Direkt .NET Container'a
+    # API İstekleri -> .NET Container
     handle /api/* {
         reverse_proxy ketenerp-api:8080 {
             header_up Host {host}
@@ -32,7 +33,7 @@
         }
     }
 
-    # Static uploads (serve from API's wwwroot) -> yönlendir API container'a
+    # Static uploads -> API container
     handle /uploads/* {
         reverse_proxy ketenerp-api:8080 {
             header_up Host {host}
@@ -42,12 +43,12 @@
         }
     }
 
-    # Swagger (Opsiyonel)
+    # Swagger
     handle /swagger* {
         reverse_proxy ketenerp-api:8080
     }
 
-    # Diğer her şey (Frontend) -> Nginx Container'a
+    # Frontend -> Nginx Container
     handle {
         reverse_proxy ketenerp-frontend:80 {
             header_up Host {host}

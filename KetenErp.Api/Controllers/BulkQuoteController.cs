@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.Extensions.Configuration;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -21,8 +22,9 @@ namespace KetenErp.Api.Controllers
     private readonly KetenErp.Core.Repositories.ISparePartRepository _spareRepo;
     private readonly KetenErp.Infrastructure.Data.KetenErpDbContext _db;
     private readonly EmailService _emailService;
+    private readonly string _frontendUrl;
 
-        public BulkQuoteController(IServiceRecordRepository recordRepo, IServiceOperationRepository opRepo, KetenErp.Core.Repositories.IProductRepository productRepo, KetenErp.Core.Repositories.ISparePartRepository spareRepo, KetenErp.Infrastructure.Data.KetenErpDbContext db, EmailService emailService)
+        public BulkQuoteController(IServiceRecordRepository recordRepo, IServiceOperationRepository opRepo, KetenErp.Core.Repositories.IProductRepository productRepo, KetenErp.Core.Repositories.ISparePartRepository spareRepo, KetenErp.Infrastructure.Data.KetenErpDbContext db, EmailService emailService, IConfiguration configuration)
         {
             _recordRepo = recordRepo;
             _opRepo = opRepo;
@@ -30,6 +32,7 @@ namespace KetenErp.Api.Controllers
             _spareRepo = spareRepo;
             _db = db;
             _emailService = emailService;
+            _frontendUrl = configuration["FrontendUrl"] ?? string.Empty;
         }
 
         public class BulkQuoteItemDto
@@ -261,8 +264,8 @@ namespace KetenErp.Api.Controllers
             var filePath = Path.Combine(exportsDir, fileName);
             var logoPath = Path.Combine(AppContext.BaseDirectory, "Services", "weblogo.jpg");
             
-            // Use public-facing base URL so generated PDFs contain customer-friendly links
-            var publicBaseUrl = "http://havalielaletleritamiri.com:8443";
+            // Use public-facing base URL so generated PDFs contain customer-friendly links (configured via FrontendUrl)
+            var publicBaseUrl = !string.IsNullOrWhiteSpace(_frontendUrl) ? _frontendUrl : "";
             byte[] pdf = TeklifPdfOlusturucu.Olustur(musteriAdi, tumUrunler, logoPath, null, belgeNoForPdf, req.SenderName, publicBaseUrl);
             await System.IO.File.WriteAllBytesAsync(filePath, pdf);
             exported.Add(filePath);

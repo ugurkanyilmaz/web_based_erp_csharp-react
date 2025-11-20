@@ -155,7 +155,7 @@ namespace KetenErp.Api.Controllers
         {
             var photos = await _db.ServiceRecordPhotos.Where(p => p.ServiceRecordId == id).OrderByDescending(p => p.CreatedAt).ToListAsync();
             var baseUrl = "";
-            try { baseUrl = Request.Scheme + "://" + Request.Host.Value; } catch { baseUrl = ""; }
+            try { baseUrl = Request.Scheme + "://" + Request.Host.Host; } catch { baseUrl = ""; }
 
             var result = photos.Select(p =>
             {
@@ -245,7 +245,7 @@ namespace KetenErp.Api.Controllers
                     };
                     _db.ServiceRecordPhotos.Add(photo);
                     await _db.SaveChangesAsync();
-                    var url = Request.Scheme + "://" + Request.Host + "/" + relative.Replace('\\','/');
+                    var url = Request.Scheme + "://" + Request.Host.Host + "/" + relative.Replace('\\','/');
                     saved.Add(new { photo.Id, Url = url });
                 }
                 catch (Exception ex)

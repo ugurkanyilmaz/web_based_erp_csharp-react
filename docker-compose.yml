@@ -79,6 +79,18 @@ services:
     networks:
       - ketenerp-network
 
+  # --- Cloudflare Tunnel (cloudflared) ---
+  # Starts a cloudflared tunnel using the host network so the tunnel
+  # can access localhost:8443 directly on the host.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflare-tunnel
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    network_mode: host
+
 volumes:
   postgres_data:
   caddy_data:
